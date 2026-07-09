@@ -22,12 +22,11 @@ def clean_each_test():
     """Перед каждым тестом очищает таблицы и создает стартовые данные"""
     conn = database.get_db_connection()
     cursor = conn.cursor()
-    # Очищаем связующие таблицы во избежание конфликтов FOREIGN KEY
     cursor.execute("DELETE FROM order_items")
     cursor.execute("DELETE FROM orders")
     cursor.execute("DELETE FROM menu")
     
-    # Жестко фиксируем блюдо с ID=1 для тестов
+
     cursor.execute(
         "INSERT INTO menu (id, name, price, category) VALUES (?, ?, ?, ?)", 
         (1, "Тестовая пицца", 400.0, "Пицца")
@@ -35,7 +34,7 @@ def clean_each_test():
     conn.commit()
     conn.close()
 
-# Создаем тестового клиента
+
 client = TestClient(app)
 
 # --- ТЕСТЫ МЕНЮ ---
@@ -80,7 +79,7 @@ def test_create_order_success():
     data = response.json()
     assert data["table_number"] == 3
     assert data["status"] == "принят"
-    assert data["total_price"] == 800.0  # Проверяем автоматический расчет
+    assert data["total_price"] == 800.0 
     assert "id" in data
 
 def test_create_order_dish_not_found():

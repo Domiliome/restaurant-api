@@ -18,8 +18,7 @@ app = FastAPI(
 )
 
 app.include_router(menu_router, prefix="/menu", tags=["Menu"])
-app.include_router(orders_router, prefix="/orders", tags=["Orders"])  # <-- 2. Подключаем роутер
-
+app.include_router(orders_router, prefix="/orders", tags=["Orders"])
 @app.get("/", tags=["Root"])
 def read_root():
     return {"message": "Добро пожаловать в API ресторана!"}

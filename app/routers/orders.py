@@ -10,7 +10,7 @@ _id_counter = 1
 MENU_PRICES = {
     1: 400.0
 }
-
+# TO DO Модель не испозуется с файла models/orders
 class OrderItemSchema(BaseModel):
     dish_id: int
     quantity: int
