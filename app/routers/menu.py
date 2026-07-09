@@ -1,7 +1,5 @@
 from fastapi import APIRouter, HTTPException
-# Импортируем схему данных из нашего нового модуля моделей
 from app.models.menu import DishCreate
-# Импортируем функцию подключения к базе данных
 from app.database import get_db_connection
 
 router = APIRouter()
