@@ -11,9 +11,10 @@ def get_db_connection():
     return conn
 
 def init_db():
-    # Создаем таблицу меню, если её ещё нет
     conn = get_db_connection()
     cursor = conn.cursor()
+    
+    # 1. Таблица меню
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS menu (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -23,14 +24,39 @@ def init_db():
         )
     """)
     
-    # Наполняем базу начальными данными, если она абсолютно пустая
-    cursor.execute("SELECT COUNT(*) FROM menu")
-    if cursor.fetchone()[0] == 0:
+    # 2. Таблица заказов для столиков
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            table_number INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'принят',
+            total_price REAL NOT NULL DEFAULT 0.0
+        )
+    """)
+    
+    # 3. Связующая таблица для блюд в заказе (многие-ко-многим)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS order_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            order_id INTEGER NOT NULL,
+            dish_id INTEGER NOT NULL,
+            quantity INTEGER NOT NULL DEFAULT 1,
+            FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+            FOREIGN KEY (dish_id) REFERENCES menu(id)
+        )
+    """)
+    
+    # Безопасная проверка количества записей в режиме sqlite3.Row
+    cursor.execute("SELECT COUNT(*) as cnt FROM menu")
+    row = cursor.fetchone()
+    
+    if row["cnt"] == 0:
         cursor.executemany("""
             INSERT INTO menu (name, price, category) VALUES (?, ?, ?)
         """, [
             ("Пицца Маргарита", 450.0, "Пицца"),
             ("Салат Цезарь", 380.0, "Салаты")
         ])
+        
     conn.commit()
     conn.close()

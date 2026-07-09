@@ -7,7 +7,6 @@ import app.database as database
 TEST_DB_PATH = "test_restaurant.db"
 database.DB_PATH = TEST_DB_PATH
 
-# 2. Теперь безопасно импортируем само приложение
 from app.main import app
 
 @pytest.fixture(scope="session", autouse=True)
@@ -20,11 +19,15 @@ def manage_test_db():
 
 @pytest.fixture(autouse=True)
 def clean_each_test():
-    """Перед каждым тестом очищает таблицу меню и добавляет одно тестовое блюдо"""
+    """Перед каждым тестом очищает таблицы и создает стартовые данные"""
     conn = database.get_db_connection()
     cursor = conn.cursor()
+    # Очищаем связующие таблицы во избежание конфликтов FOREIGN KEY
+    cursor.execute("DELETE FROM order_items")
+    cursor.execute("DELETE FROM orders")
     cursor.execute("DELETE FROM menu")
-    # Жестко фиксируем ID=1 для тестов получения и удаления
+    
+    # Жестко фиксируем блюдо с ID=1 для тестов
     cursor.execute(
         "INSERT INTO menu (id, name, price, category) VALUES (?, ?, ?, ?)", 
         (1, "Тестовая пицца", 400.0, "Пицца")
@@ -35,7 +38,7 @@ def clean_each_test():
 # Создаем тестового клиента
 client = TestClient(app)
 
-# --- Тест-кейсы ---
+# --- ТЕСТЫ МЕНЮ ---
 
 def test_get_menu():
     response = client.get("/menu/")
@@ -59,3 +62,57 @@ def test_delete_dish():
     response = client.delete("/menu/1")
     assert response.status_code == 200
     assert "успешно удалено" in response.json()["message"]
+
+
+# --- ТЕСТЫ ЗАКАЗОВ (ORDERS) ---
+
+def test_create_order_success():
+    """Успешное создание заказа со стоимостью на основе цен из меню"""
+    order_data = {
+        "table_number": 3,
+        "items": [
+            {"dish_id": 1, "quantity": 2} # 2 пиццы по 400 = 800
+        ]
+    }
+    response = client.post("/orders/", json=order_data)
+    assert response.status_code == 201
+    
+    data = response.json()
+    assert data["table_number"] == 3
+    assert data["status"] == "принят"
+    assert data["total_price"] == 800.0  # Проверяем автоматический расчет
+    assert "id" in data
+
+def test_create_order_dish_not_found():
+    """Заказ должен вернуть 404, если блюда нет в меню"""
+    order_data = {
+        "table_number": 2,
+        "items": [
+            {"dish_id": 999, "quantity": 1} # ID 999 не существует
+        ]
+    }
+    response = client.post("/orders/", json=order_data)
+    assert response.status_code == 404
+    assert "не найдено в меню" in response.json()["detail"]
+
+def test_get_orders_list():
+    """Проверка получения списка всех заказов"""
+    # Сначала создаем один заказ
+    client.post("/orders/", json={"table_number": 4, "items": [{"dish_id": 1, "quantity": 1}]})
+    
+    response = client.get("/orders/")
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["table_number"] == 4
+
+def test_update_order_status():
+    """Проверка успешной смены статуса заказа через PATCH"""
+    # Создаем заказ
+    create_res = client.post("/orders/", json={"table_number": 1, "items": [{"dish_id": 1, "quantity": 1}]})
+    order_id = create_res.json()["id"]
+    
+    # Меняем статус
+    update_data = {"status": "готовится"}
+    response = client.patch(f"/orders/{order_id}", json=update_data)
+    assert response.status_code == 200
+    assert "успешно обновлен на 'готовится'" in response.json()["message"]
