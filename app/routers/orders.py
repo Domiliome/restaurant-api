@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, status
 from typing import List
-# 1. Используем правильные схемы из вашего файла моделей
+# Используем схемы из файла моделей
 from app.models.orders import OrderCreate, OrderStatusUpdate
 from app.database import get_db_connection
 
@@ -109,4 +109,75 @@ def update_order_status(order_id: int, status_data: OrderStatusUpdate):
     
     return {
         "message": f"Статус заказа #{order_id} успешно обновлен на '{status_data.status}'"
+    }
+
+
+# 4. Закрытие (оплата) заказа и печать чека
+@router.post("/{order_id}/pay", status_code=status.HTTP_200_OK)
+def pay_and_print_receipt(order_id: int):
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    
+    # Проверяем существование заказа
+    cursor.execute("SELECT * FROM orders WHERE id = ?", (order_id,))
+    order_row = cursor.fetchone()
+    
+    if order_row is None:
+        conn.close()
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Заказ с ID {order_id} не найден"
+        )
+        
+    order = dict(order_row)
+    if order["status"] == "оплачен":
+        conn.close()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Этот заказ уже был оплачен ранее"
+        )
+        
+    # Собираем все позиции этого заказа для чека
+    cursor.execute("""
+        SELECT m.name, m.price, oi.quantity 
+        FROM order_items oi
+        JOIN menu m ON oi.dish_id = m.id
+        WHERE oi.order_id = ?
+    """, (order_id,))
+    items = [dict(item) for item in cursor.fetchall()]
+    
+    # Меняем статус заказа на 'оплачен'
+    cursor.execute("UPDATE orders SET status = 'оплачен' WHERE id = ?", (order_id,))
+    conn.commit()
+    conn.close()
+    
+    # Генерируем красивый текстовый чек
+    receipt_lines = [
+        "================================",
+        "       РЕСТОРАН 'FAST FLAVORS'  ",
+        "================================",
+        f"Заказ №:       {order['id']}",
+        f"Столик №:      {order['table_number']}",
+        f"Статус:        ОПЛАЧЕНО",
+        "--------------------------------"
+    ]
+    
+    for item in items:
+        item_total = item['price'] * item['quantity']
+        receipt_lines.append(f"{item['name']}")
+        receipt_lines.append(f"  {item['quantity']} шт. х {item['price']:.2f} = {item_total:.2f} руб.")
+        
+    receipt_lines.extend([
+        "--------------------------------",
+        f"ИТОГО К ОПЛАТЕ:  {order['total_price']:.2f} руб.",
+        "================================",
+        "    Спасибо за ваш визит!       ",
+        "================================"
+    ])
+    
+    text_receipt = "\n".join(receipt_lines)
+    
+    return {
+        "message": f"Заказ #{order_id} успешно оплачен и закрыт",
+        "receipt": text_receipt
     }

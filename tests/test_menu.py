@@ -115,3 +115,20 @@ def test_update_order_status():
     response = client.patch(f"/orders/{order_id}", json=update_data)
     assert response.status_code == 200
     assert "успешно обновлен на 'готовится'" in response.json()["message"]
+
+def test_pay_order_success_and_block_duplicate():
+    """Проверяем успешную оплату и блокировку повторного закрытия чека"""
+    # 1. Создаем заказ
+    create_res = client.post("/orders/", json={"table_number": 2, "items": [{"dish_id": 1, "quantity": 2}]})
+    order_id = create_res.json()["id"]
+    
+    # 2. Оплачиваем заказ
+    pay_response = client.post(f"/orders/{order_id}/pay")
+    assert pay_response.status_code == 200
+    assert "успешно оплачен и закрыт" in pay_response.json()["message"]
+    assert "ИТОГО К ОПЛАТЕ" in pay_response.json()["receipt"]
+    
+    # 3. Пробуем оплатить его ЕЩЁ РАЗ (должна быть ошибка 400)
+    duplicate_pay = client.post(f"/orders/{order_id}/pay")
+    assert duplicate_pay.status_code == 400
+    assert "уже был оплачен ранее" in duplicate_pay.json()["detail"]
