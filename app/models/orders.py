@@ -1,10 +1,16 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List
 
-class OrderItemSchema(BaseModel):
-    dish_id: int
-    quantity: int
+# Схема для конкретного элемента в заказе
+class OrderItemCreate(BaseModel):
+    dish_id: int = Field(..., description="ID блюда из меню")
+    quantity: int = Field(..., gt=0, description="Количество порций (больше 0)")
 
-class OrderCreateSchema(BaseModel):
-    table_number: int
-    items: List[OrderItemSchema]
+# Схема для создания самого заказа (её ищет роутер)
+class OrderCreate(BaseModel):
+    table_number: int = Field(..., gt=0, description="Номер столика")
+    items: List[OrderItemCreate] = Field(..., min_length=1, description="Список блюд в заказе")
+
+# Схема для обновления статуса заказа (её ищет роутер)
+class OrderStatusUpdate(BaseModel):
+    status: str = Field(..., description="Новый статус: принят, готовится, подан, оплачен")
